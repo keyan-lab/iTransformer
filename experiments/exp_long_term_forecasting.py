@@ -36,6 +36,27 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         criterion = nn.MSELoss()
         return criterion
 
+    def _forward_model(self, batch_x, batch_x_mark, dec_inp, batch_y_mark,
+                       y_future=None):
+        if self.args.model == 'iTransformer_GDE':
+            raw_output = self.model(
+                batch_x,
+                batch_x_mark,
+                dec_inp,
+                batch_y_mark,
+                y_future=y_future,
+            )
+        else:
+            raw_output = self.model(
+                batch_x, batch_x_mark, dec_inp, batch_y_mark
+            )
+
+        if isinstance(raw_output, dict):
+            return raw_output['prediction'], raw_output.get('cfm_loss')
+        if self.args.output_attention:
+            return raw_output[0], None
+        return raw_output, None
+
     def vali(self, vali_data, vali_loader, criterion):
         total_loss = []
         self.model.eval()
@@ -56,15 +77,13 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        outputs, _ = self._forward_model(
+                            batch_x, batch_x_mark, dec_inp, batch_y_mark
+                        )
                 else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                    else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    outputs, _ = self._forward_model(
+                        batch_x, batch_x_mark, dec_inp, batch_y_mark
+                    )
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
@@ -122,28 +141,39 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
 
                 # encoder - decoder
+                future_target = batch_y[:, -self.args.pred_len:, :]
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        outputs, auxiliary_loss = self._forward_model(
+                            batch_x,
+                            batch_x_mark,
+                            dec_inp,
+                            batch_y_mark,
+                            y_future=future_target,
+                        )
 
                         f_dim = -1 if self.args.features == 'MS' else 0
                         outputs = outputs[:, -self.args.pred_len:, f_dim:]
                         batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                         loss = criterion(outputs, batch_y)
+                        if auxiliary_loss is not None:
+                            loss = loss + self.args.lambda_cfm * auxiliary_loss
                         train_loss.append(loss.item())
                 else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                    else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    outputs, auxiliary_loss = self._forward_model(
+                        batch_x,
+                        batch_x_mark,
+                        dec_inp,
+                        batch_y_mark,
+                        y_future=future_target,
+                    )
 
                     f_dim = -1 if self.args.features == 'MS' else 0
                     outputs = outputs[:, -self.args.pred_len:, f_dim:]
                     batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                     loss = criterion(outputs, batch_y)
+                    if auxiliary_loss is not None:
+                        loss = loss + self.args.lambda_cfm * auxiliary_loss
                     train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
@@ -214,16 +244,13 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        outputs, _ = self._forward_model(
+                            batch_x, batch_x_mark, dec_inp, batch_y_mark
+                        )
                 else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-
-                    else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    outputs, _ = self._forward_model(
+                        batch_x, batch_x_mark, dec_inp, batch_y_mark
+                    )
 
                 f_dim = -1 if self.args.features == 'MS' else 0
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
@@ -301,15 +328,13 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                        outputs, _ = self._forward_model(
+                            batch_x, batch_x_mark, dec_inp, batch_y_mark
+                        )
                 else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
-                    else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                    outputs, _ = self._forward_model(
+                        batch_x, batch_x_mark, dec_inp, batch_y_mark
+                    )
                 outputs = outputs.detach().cpu().numpy()
                 if pred_data.scale and self.args.inverse:
                     shape = outputs.shape
