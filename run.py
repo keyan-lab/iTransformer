@@ -6,18 +6,14 @@ import random
 import numpy as np
 
 if __name__ == '__main__':
-    fix_seed = 2023
-    random.seed(fix_seed)
-    torch.manual_seed(fix_seed)
-    np.random.seed(fix_seed)
-
     parser = argparse.ArgumentParser(description='iTransformer')
 
     # basic config
     parser.add_argument('--is_training', type=int, required=True, default=1, help='status')
     parser.add_argument('--model_id', type=str, required=True, default='test', help='model id')
     parser.add_argument('--model', type=str, required=True, default='iTransformer',
-                        help='model name, options: [iTransformer, iInformer, iReformer, iFlowformer, iFlashformer]')
+                        help='model name, including [iTransformer, iTransformer_GDE]')
+    parser.add_argument('--seed', type=int, default=2023, help='random seed')
 
     # data loader
     parser.add_argument('--data', type=str, required=True, default='custom', help='dataset type')
@@ -87,7 +83,17 @@ if __name__ == '__main__':
     parser.add_argument('--partial_start_index', type=int, default=0, help='the start index of variates for partial training, '
                                                                            'you can select [partial_start_index, min(enc_in + partial_start_index, N)]')
 
+    # GDE-CFM adapter (used only when --model iTransformer_GDE)
+    parser.add_argument('--lambda_cfm', type=float, default=0.1, help='weight of the CFM auxiliary loss')
+    parser.add_argument('--gde_scales', type=str, default='1,2,4', help='comma-separated velocity scales')
+    parser.add_argument('--gde_probe_times', type=str, default='0.5', help='comma-separated flow probe times')
+    parser.add_argument('--gde_flow_layers', type=int, default=2, help='number of vector-field blocks')
+    parser.add_argument('--gde_flow_d_ff', type=int, default=256, help='vector-field feed-forward dimension')
+
     args = parser.parse_args()
+    random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
 
     if args.use_gpu and args.use_multi_gpu:

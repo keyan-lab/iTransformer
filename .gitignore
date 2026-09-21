@@ -127,5 +127,12 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# Experiment artifacts and public datasets
+dataset/
+checkpoints/
+results/
+test_results/
+result_long_term_forecast.txt
+
 # Pyre type checker
 .pyre/
